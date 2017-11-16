@@ -5,13 +5,60 @@ import (
 	"log"
 	"net"
 	"net/rpc"
-	"golang.org/x/tools/go/ssa"
 	"strconv"
+	"sync"
 )
 
 //
 // Common between client and server
 //
+
+
+
+const (
+	OK       = "OK"
+	ErrNoKey = "ErrNoKey"
+)
+
+type Err string
+
+type PutArgs struct {
+	Key   string
+	Value string
+}
+
+type PutReply struct {
+	Err Err
+}
+
+type GetArgs struct {
+	Key string
+}
+
+type GetReply struct {
+	Err   Err
+	Value string
+}
+
+type ListArgs struct {
+	Key string
+}
+
+type ListReply struct {
+	Err Err
+	Value []string
+}
+//
+// Server
+//
+
+type KV struct {
+	mu       sync.Mutex
+	keyvalue map[string]string
+}
+
+
+//////////////////////////////////////////////////////////
 
 func (kv *KV) Get(args *GetArgs, reply *GetReply) error {
 	kv.mu.Lock()
@@ -38,6 +85,26 @@ func (kv *KV) Put(args *PutArgs, reply *PutReply) error {
 	return nil
 }
 
+
+func (kv *KV) List(args *ListArgs, reply *ListReply) error {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	lr := ListReply{}
+	count :=0
+	reply.Err = "OK"
+	for _, v := range kv.keyvalue {
+		if c, e := strconv.Atoi(v); e == nil || count > c{
+			break
+		}else{
+			fmt.Println("\n appending %v", v)
+			lr.Value = append(lr.Value, v)
+			count++
+		}
+	}
+	fmt.Println("\n returning %v", lr.Value)
+	return nil
+}
+
 func server() {
 	kv := new(KV)
 
@@ -48,7 +115,7 @@ func server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	go func() {
+//	go func() {
 		for {
 			conn, err := l.Accept()
 			if err == nil {
@@ -59,61 +126,9 @@ func server() {
 		}
 		l.Close()
 		fmt.Printf("Server done\n")
-	}()
+//	}()
 }
 
-//
-// Client
-//
-
-func Dial() *rpc.Client {
-	client, err := rpc.Dial("tcp", ":1234")
-	if err != nil {
-		log.Fatal("dialing:", err)
-	}
-	return client
-}
-
-func Get(key string) string {
-	client := Dial()
-	args := &GetArgs{"subject"}
-	reply := GetReply{"", ""}
-	err := client.Call("KV.Get", args, &reply)
-	if err != nil {
-		log.Fatal("error:", err)
-	}
-	client.Close()
-	return reply.Value
-}
-
-func Put(key string, val string) {
-	client := Dial()
-	args := &PutArgs{"subject", "6.824"}
-	reply := PutReply{""}
-	err := client.Call("KV.Put", args, &reply)
-	if err != nil {
-		log.Fatal("error:", err)
-	}
-	client.Close()
-}
-
-
-func (kv *KV) List(args *ListArgs, reply *ListReply) error {
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-	lr := ListReply{}
-	count :=0
-	reply.Err = "OK"
-	for _, v := range kv.keyvalue {
-		if c, e := strconv.Atoi(v); e == nil || c > count{
-			break
-		}else{
-			lr.Value = append(lr.Value, v)
-			count++
-		}
-	}
-	return nil
-}
 
 //
 // main
