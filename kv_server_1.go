@@ -5,46 +5,13 @@ import (
 	"log"
 	"net"
 	"net/rpc"
-	"sync"
+	"golang.org/x/tools/go/ssa"
+	"strconv"
 )
 
 //
 // Common between client and server
 //
-
-const (
-	OK       = "OK"
-	ErrNoKey = "ErrNoKey"
-)
-
-type Err string
-
-type PutArgs struct {
-	Key   string
-	Value string
-}
-
-type PutReply struct {
-	Err Err
-}
-
-type GetArgs struct {
-	Key string
-}
-
-type GetReply struct {
-	Err   Err
-	Value string
-}
-
-//
-// Server
-//
-
-type KV struct {
-	mu       sync.Mutex
-	keyvalue map[string]string
-}
 
 func (kv *KV) Get(args *GetArgs, reply *GetReply) error {
 	kv.mu.Lock()
@@ -130,6 +97,24 @@ func Put(key string, val string) {
 	client.Close()
 }
 
+
+func (kv *KV) List(args *ListArgs, reply *ListReply) error {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	lr := ListReply{}
+	count :=0
+	reply.Err = "OK"
+	for _, v := range kv.keyvalue {
+		if c, e := strconv.Atoi(v); e == nil || c > count{
+			break
+		}else{
+			lr.Value = append(lr.Value, v)
+			count++
+		}
+	}
+	return nil
+}
+
 //
 // main
 //
@@ -137,7 +122,4 @@ func Put(key string, val string) {
 func main() {
 	server()
 
-	Put("subject", "6.824")
-	fmt.Printf("Put subjet done\n")
-	fmt.Printf("Get %s\n", Get("subject"))
 }
